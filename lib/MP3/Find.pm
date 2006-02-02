@@ -8,7 +8,7 @@ use vars qw($VERSION @EXPORT);
 
 use Carp;
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 
 @EXPORT = qw(find_mp3s);
 
@@ -68,6 +68,11 @@ default to using L<MP3::Find::Filesystem>.
 B<Note:> I'm still working out some kinks in the DB backend, so it
 is currently not as stable as the Filesystem backend.
 
+B<Note the second>: This whole project is still in the alpha stage, so
+I can make no guarentees that there won't be significant interface changes
+in the next few versions or so. Also, comments about what about the API
+rocks (or sucks!) are appreciated.
+
 =head1 REQUIRES
 
 L<File::Find>, L<MP3::Info>, and L<Scalar::Util> are needed for
@@ -88,8 +93,8 @@ Takes the following options:
 
 =item C<dir>
 
-Where to start the search. This can either be a single string or
-an arrayref. Defaults to your home directory.
+Arrayref or scalar; tell C<find_mp3s> where to start the search.
+Directories in the arrayref are searched sequentially.
 
 =item C<query>
 
@@ -97,16 +102,18 @@ Hashref of search parameters. Recognized fields are anything that
 L<MP3::Info> knows about. Field names can be given in either upper
 or lower case; C<find_mp3s> will convert them into upper case for 
 you. Value may either be strings, which are converted into regular
-exporessions, or may be C<qr[...]> regular expressions already.
+exporessions, or may be C<qr/.../> regular expressions already.
 
 =item C<ignore_case>
 
-Ignore case when matching search strings to the ID3 tag values.
+Boolean, default false; set to a true value to ignore case when
+matching search strings to the ID3 tag values.
 
 =item C<exact_match>
 
-Adds an implicit C<^> and C<$> around each query string. Does nothing
-if the query is already a regular expression.
+Boolean, default false; set to a true value to add an implicit
+C<^> and C<$> around each query string. Does nothing if the query
+term is already a regular expression.
 
 =item C<sort>
 
@@ -137,10 +144,11 @@ Perl's C<printf>.
 
 =item C<no_format>
 
-Causes C<find_mp3s> to return an array of hashrefs instead of an array
-of (formatted) strings. Each hashref consists of the key-value pairs
-from C<MP3::Info::get_mp3_tag> and C<MP3::Info::get_mp3_info>, plus
-the key C<FILENAME> (with the obvious value ;-)
+Boolean, default false; set to a true value to have C<find_mp3s> to
+return an array of hashrefs instead of an array of (formatted) strings.
+Each hashref consists of the key-value pairs from C<MP3::Info::get_mp3_tag>
+and C<MP3::Info::get_mp3_info>, plus the key C<FILENAME> (with the obvious 
+value ;-)
 
     @results = (
         {

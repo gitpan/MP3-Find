@@ -41,10 +41,13 @@ sub find_mp3s {
         ();
     
     foreach (keys %QUERY) {
-        # so we don't have spurious warnings when trying to match against undef
-        delete $QUERY{$_} unless defined $QUERY{$_};
-        # package everything uniformly, so subclasses don't need to unpack it
-        $QUERY{$_} = [ $QUERY{$_} ] unless ref $QUERY{$_} eq 'ARRAY';
+        if (defined $QUERY{$_}) {
+            # package everything uniformly, so subclasses don't need to unpack it
+            $QUERY{$_} = [ $QUERY{$_} ] unless ref $QUERY{$_} eq 'ARRAY';
+        } else {
+            # so we don't have spurious warnings when trying to match against undef        
+            delete $QUERY{$_};
+        }
     }
     
     # do the search
@@ -89,7 +92,7 @@ sub search {
 
 =head1 NAME
 
-MP3::Find::Base - Base class for MP3::Find finders
+MP3::Find::Base - Base class for MP3::Find backends
 
 =head1 SYNOPSIS
 
