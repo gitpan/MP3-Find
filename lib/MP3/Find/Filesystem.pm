@@ -9,6 +9,13 @@ use File::Find;
 use MP3::Info;
 use Scalar::Util qw(looks_like_number);
 
+eval {
+    require Sort::Key;
+    Sort::Key->import(qw(multikeysorter));
+    use Sort::Key::Natural;
+};
+my $USE_SORT_KEY = $@ ? 0 : 1;
+
 use_winamp_genres();
 
 sub search {
@@ -45,18 +52,29 @@ sub search {
     
     # sort the results
     if (@$sort) {
-        @results = sort {
-            my $compare;
-            foreach (map { uc } @$sort) {
-                # use Scalar::Util to do the right sort of comparison
-                $compare = (looks_like_number($a->{$_}) && looks_like_number($b->{$_})) ?
-                    $a->{$_} <=> $b->{$_} :
-                    $a->{$_} cmp $b->{$_};
-                # we found a field they differ on
-                last if $compare;
-            }
-            return $compare;
-        } @results;
+	if ($USE_SORT_KEY) {
+	    # use Sort::Key to do a (hopefully!) faster sort
+	    #TODO: profile this; at first glance, it doesn't actually seem to be any faster
+	    #warn "Using Sort::Key";
+	    my $sorter = multikeysorter(
+		sub { my $info = $_; map { $info->{uc $_} } @$sort },
+		map { 'natural' } @$sort
+	    );
+	    @results = $sorter->(@results);
+	} else {
+	    @results = sort {
+		my $compare;
+		foreach (map { uc } @$sort) {
+		    # use Scalar::Util to do the right sort of comparison
+		    $compare = (looks_like_number($a->{$_}) && looks_like_number($b->{$_})) ?
+			$a->{$_} <=> $b->{$_} :
+			$a->{$_} cmp $b->{$_};
+		    # we found a field they differ on
+		    last if $compare;
+		}
+		return $compare;
+	    } @results;
+	}
     }
     
     return @results
@@ -77,20 +95,25 @@ sub match_mp3 {
     };
     
     if ($$options{use_id3v2}) {
-        require MP3::Tag;
-        # add ID3v2 tag info, if present
-        my $mp3_tags = MP3::Tag->new($filename);
-        $mp3_tags->get_tags;
-        if (my $id3v2 = $mp3_tags->{ID3v2}) {
-            for my $frame_id (keys %{ $id3v2->get_frame_ids }) {
-                my ($info) = $id3v2->get_frame($frame_id);
-                if (ref $info eq 'HASH') {
-                    #TODO: how should we handle these?
-                } else {
-                    $mp3->{$frame_id} = $info;
-                }
-            }
-        }
+	eval { require MP3::Tag };
+	if ($@) {
+	    # we weren't able to load MP3::Tag!
+	    warn "MP3::Tag is required to search ID3v2 tags";
+	} else {
+	    # add ID3v2 tag info, if present
+	    my $mp3_tags = MP3::Tag->new($filename);
+	    $mp3_tags->get_tags;
+	    if (my $id3v2 = $mp3_tags->{ID3v2}) {
+		for my $frame_id (keys %{ $id3v2->get_frame_ids }) {
+		    my ($info) = $id3v2->get_frame($frame_id);
+		    if (ref $info eq 'HASH') {
+			#TODO: how should we handle these?
+		    } else {
+			$mp3->{$frame_id} = $info;
+		    }
+		}
+	    }
+	}
     }
 
     for my $field (keys(%{ $query })) {
