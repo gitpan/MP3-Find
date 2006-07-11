@@ -9,12 +9,18 @@ use File::Find;
 use MP3::Info;
 use Scalar::Util qw(looks_like_number);
 
+use MP3::Find::Util qw(get_mp3_metadata);
+
 eval {
     require Sort::Key;
     Sort::Key->import(qw(multikeysorter));
-    use Sort::Key::Natural;
+    require Sort::Key::Natural;
 };
 my $USE_SORT_KEY = $@ ? 0 : 1;
+
+
+eval { require MP3::Tag };
+my $CAN_USE_ID3V2 = $@ ? 0 : 1;
 
 use_winamp_genres();
 
@@ -46,6 +52,11 @@ sub search {
         }
     }
     
+    if ($$options{use_id3v2} and not $CAN_USE_ID3V2) {
+	# they want to use ID3v2, but don't have MP3::Tag
+	warn "MP3::Tag is required to search ID3v2 tags\n";
+    }
+	
     # run the actual find
     my @results;
     find(sub { match_mp3($File::Find::name, $query, \@results, $options) }, $_) foreach @$dirs;
@@ -87,34 +98,11 @@ sub match_mp3 {
     if ($$options{exclude_path}) {
         return if $filename =~ $$options{exclude_path};
     }
-    
-    my $mp3 = {
-        FILENAME => $filename,
-        %{ get_mp3tag($filename)  || {} },
-        %{ get_mp3info($filename) || {} },
-    };
-    
-    if ($$options{use_id3v2}) {
-	eval { require MP3::Tag };
-	if ($@) {
-	    # we weren't able to load MP3::Tag!
-	    warn "MP3::Tag is required to search ID3v2 tags";
-	} else {
-	    # add ID3v2 tag info, if present
-	    my $mp3_tags = MP3::Tag->new($filename);
-	    $mp3_tags->get_tags;
-	    if (my $id3v2 = $mp3_tags->{ID3v2}) {
-		for my $frame_id (keys %{ $id3v2->get_frame_ids }) {
-		    my ($info) = $id3v2->get_frame($frame_id);
-		    if (ref $info eq 'HASH') {
-			#TODO: how should we handle these?
-		    } else {
-			$mp3->{$frame_id} = $info;
-		    }
-		}
-	    }
-	}
-    }
+
+    my $mp3 = get_mp3_metadata({
+	filename  => $filename,
+	use_id3v2 => $options->{use_id3v2},
+    });
 
     for my $field (keys(%{ $query })) {
         my $value = $mp3->{uc($field)};
